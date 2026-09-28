@@ -11,3 +11,8 @@ out/
 
 # Browser-Automation
 .playwright-mcp/
+
+.claude/
+.env
+desktop.ini
+
