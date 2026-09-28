@@ -10,7 +10,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,7 +51,7 @@ public class MessageController {
     /**
      * Liefert die letzten Nachrichten eines Raums, neueste zuerst.
      * Gelesen wird direkt aus der Datenbank - dieser Weg laeuft komplett getrennt vom Senden
-     * ueber RabbitMQ, das erst in Task 4 dazukommt.
+     * ueber RabbitMQ (siehe send() weiter unten).
      */
     @Operation(
             summary = "Verlauf eines Raums lesen",
@@ -93,5 +96,54 @@ public class MessageController {
         // Der Rueckgabewert (eine List<Message>) wird von Spring automatisch in JSON
         // umgewandelt, weil die Klasse mit @RestController markiert ist.
         return history;
+    }
+
+    /**
+     * Nimmt eine Nachricht entgegen und gibt sie an RabbitMQ weiter.
+     *
+     * Die Antwort ist 202 Accepted und nicht 201 Created: wir haben die Nachricht
+     * angenommen und weitergegeben, gespeichert ist sie in diesem Moment noch nicht.
+     * 201 wuerde etwas versprechen, was noch nicht stimmt.
+     */
+    @Operation(
+            summary = "Nachricht senden",
+            description = "Nimmt eine Nachricht an und publiziert sie auf den Fanout-Exchange "
+                        + "'chat.messages'. Die Antwort kommt sofort. Gespeichert wird die "
+                        + "Nachricht kurz danach vom batch-service - sie erscheint also erst "
+                        + "mit kleiner Verzoegerung im Verlauf.")
+    @ApiResponse(responseCode = "202", description = "Nachricht angenommen und publiziert")
+    @ApiResponse(responseCode = "400", description = "roomId fehlt oder der Text ist leer")
+    @PostMapping   // Reagiert auf HTTP POST /api/messages (Praefix von @RequestMapping oben)
+    public ResponseEntity<Message> send(@RequestBody NewMessage incoming) {
+        // @RequestBody: Spring liest den JSON-Koerper der Anfrage und baut daraus automatisch
+        // ein NewMessage-Objekt - Feldname im JSON = Feldname im record.
+
+        log.info("Sendeanfrage erhalten: Raum {}, Absender {}", incoming.roomId(), incoming.sender());
+
+        // Eingaben pruefen, bevor irgendetwas den Dienst verlaesst.
+        // Was einmal an RabbitMQ publiziert ist, laesst sich nicht mehr zurueckholen - eine
+        // kaputte Nachricht wuerde sonst beim batch-service landen und erst dort scheitern.
+        if (incoming.roomId() == null) {
+            log.warn("Sendeanfrage ohne roomId abgelehnt");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "roomId fehlt");
+        }
+        // isBlank() ist true bei "" UND bei "   " (nur Leerzeichen). Die Pruefung auf null muss
+        // zuerst kommen: auf null duerfte man isBlank() gar nicht aufrufen.
+        if (incoming.sender() == null || incoming.sender().isBlank()) {
+            log.warn("Sendeanfrage ohne sender fuer Raum {} abgelehnt", incoming.roomId());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sender fehlt");
+        }
+        if (incoming.text() == null || incoming.text().isBlank()) {
+            log.warn("Sendeanfrage mit leerem Text fuer Raum {} abgelehnt", incoming.roomId());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "text darf nicht leer sein");
+        }
+
+        Message published = messageService.sendMessage(incoming);
+
+        log.info("Sendeanfrage beantwortet: Nachricht {} angenommen", published.id());
+        // ResponseEntity erlaubt uns, den Statuscode selbst zu waehlen - ohne sie wuerde Spring
+        // immer 200 OK schicken. accepted() setzt 202, body(...) legt die Nachricht (mit der vom
+        // Server vergebenen id und sentAt) als JSON in die Antwort.
+        return ResponseEntity.accepted().body(published);
     }
 }
