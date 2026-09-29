@@ -1,0 +1,5 @@
+# Diese Dateien schickt Docker beim Bauen NICHT mit. target/ enthaelt alte Build-Ergebnisse
+# von der IDE - das JAR wird im Container ohnehin frisch gebaut.
+target/
+*.iml
+.idea/

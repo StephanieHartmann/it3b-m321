@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Wurzel-POM, nur zum ZUSAMMENFASSEN (Aggregator). Er vererbt nichts an die Module:
+         jedes Modul hat weiterhin spring-boot-starter-parent als eigenen parent und laesst
+         sich auch allein bauen. Dieser POM sorgt nur dafuer, dass "mvn clean test" hier im
+         Wurzelverzeichnis beide Dienste in einem Lauf baut und testet. -->
+    <groupId>ch.benedict.m321</groupId>
+    <artifactId>m321-chat</artifactId>
+    <version>0.1.0</version>
+
+    <!-- "pom" heisst: dieses Projekt erzeugt selbst kein JAR, es fasst nur andere zusammen. -->
+    <packaging>pom</packaging>
+    <name>m321-chat</name>
+
+    <!-- Die Ordner der beiden Dienste. Maven baut sie der Reihe nach. -->
+    <modules>
+        <module>chat-service</module>
+        <module>batch-writer</module>
+    </modules>
+</project>

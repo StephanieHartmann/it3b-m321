@@ -2,17 +2,18 @@ package ch.benedict.m321.batch;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
 /**
- * Prueft, dass Spring alle Klassen des batch-writer zusammenbauen kann. Der Test hat
- * absichtlich keinen Rumpf: fehlt beim Hochfahren eine Bean oder ist die Konfiguration
- * fehlerhaft, schlaegt er hier fehl, bevor irgendjemand den Dienst startet.
- *
- * Der Listener wird im Test nicht gestartet (auto-startup=false). Sonst wuerde der Test
- * echte Nachrichten aus der laufenden Queue "chat.persist" abholen und in die Datenbank
- * schreiben - ein Test soll aber keine Daten veraendern, die ihm nicht gehoeren.
+ * Prueft, dass Spring alle Klassen des batch-writer zusammenbauen kann und der Dienst mit
+ * einer echten Datenbank und einem echten Broker startet. Beide kommen aus Testcontainers
+ * (siehe TestcontainersConfiguration) - der Test veraendert also keine fremden Daten.
  */
-@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
+// Die properties muessen in ALLEN Testklassen gleich sein, die TestcontainersConfiguration
+// benutzen: nur dann verwendet Spring denselben Kontext wieder und startet die Container
+// nicht ein zweites Mal. Die Bedeutung steht in MessagePersistenceTest.
+@SpringBootTest(properties = "spring.datasource.hikari.connection-timeout=1000")
+@Import(TestcontainersConfiguration.class)
 class BatchWriterApplicationTest {
 
     /**
