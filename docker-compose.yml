@@ -1,36 +1,94 @@
-# Infrastruktur fuer den Bootstrap: Datenbank und Message Broker.
-# Der chat-service laeuft in dieser Phase noch auf dem Host (aus der IDE).
+# Die ganze Chat-Anwendung: Datenbank, Message Broker, chat-service und batch-writer.
+#
+# Start:  .env aus .env.example kopieren, dann  docker compose up -d --build
+#
+# Kein Dienst veroeffentlicht einen Port (kein "ports:"). Alle vier Dienste sprechen nur
+# innerhalb des Netzes chat-net miteinander - von aussen ist nichts erreichbar (Vorgabe S2).
+# Die Zugangsdaten stehen in .env, die NICHT im Repository liegt.
 services:
 
   postgres:
     image: postgres:17-alpine
     container_name: m321-postgres
+    # Liest die Variablen aus .env direkt in den Container. Das Postgres-Image legt damit
+    # beim ersten Start Datenbank und Benutzer an.
+    env_file: .env
     environment:
-      POSTGRES_DB: chat
-      POSTGRES_USER: chat
-      POSTGRES_PASSWORD: chat
-    ports:
-      # NUR fuer den Bootstrap veroeffentlicht - siehe Hinweis im Plan.
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       # Alle .sql-Dateien hier drin fuehrt das Postgres-Image beim ERSTEN Start
       # in alphabetischer Reihenfolge aus. Danach nie wieder.
       - ./db:/docker-entrypoint-initdb.d:ro
+      # Benanntes Volume: die Daten ueberleben das Loeschen des Containers.
       - postgres-data:/var/lib/postgresql/data
+    # Prueft alle 5 Sekunden, ob die Datenbank Verbindungen annimmt. Erst wenn das klappt,
+    # gilt der Dienst als "healthy" - darauf warten die beiden Java-Dienste unten.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - chat-net
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: m321-rabbitmq
+    env_file: .env
     environment:
-      RABBITMQ_DEFAULT_USER: chat
-      RABBITMQ_DEFAULT_PASS: chat
-    ports:
-      # NUR fuer den Bootstrap veroeffentlicht - siehe Hinweis im Plan.
-      - "5672:5672"
-      # Management-Oberflaeche: http://localhost:15672 (chat / chat)
-      - "15672:15672"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    # Gleiche Idee wie bei postgres: "healthy", sobald der Broker antwortet.
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - chat-net
+
+  chat-service:
+    # Baut das Image aus chat-service/Dockerfile.
+    build: ./chat-service
+    # Im Container zeigt "localhost" auf den Container selbst, nicht auf die Datenbank.
+    # Darum ueberschreiben diese Variablen die localhost-Werte aus application.yml: Spring
+    # Boot liest SPRING_DATASOURCE_URL als spring.datasource.url usw. Die Namen "postgres"
+    # und "rabbitmq" sind die Service-Namen oben - Docker loest sie im Netz chat-net auf.
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?reWriteBatchedInserts=true
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+    # Erst starten, wenn Datenbank und Broker "healthy" sind (siehe healthcheck oben).
+    # Ohne das startet der Dienst womoeglich, bevor die beiden bereit sind.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - chat-net
+
+  batch-writer:
+    build: ./batch-writer
+    # Absichtlich KEIN container_name: ein fester Name gilt nur fuer einen einzigen
+    # Container. S6 startet aber zwei Instanzen (docker compose up --scale batch-writer=2).
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?reWriteBatchedInserts=true
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - chat-net
 
