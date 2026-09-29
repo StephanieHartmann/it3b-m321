@@ -10,8 +10,12 @@ spring:
 
   # Verbindung zur Datenbank aus docker-compose.
   # Zugangsdaten stehen hier im Klartext, weil das eine Uebungsumgebung ist.
+  #
+  # reWriteBatchedInserts=true: der PostgreSQL-Treiber fasst die Zeilen eines batchUpdate
+  # zu wenigen grossen INSERTs mit vielen VALUES-Zeilen zusammen. Ohne diese Einstellung
+  # schickt er trotz batchUpdate jede Zeile als eigenes INSERT an die Datenbank.
   datasource:
-    url: jdbc:postgresql://localhost:5432/chat
+    url: jdbc:postgresql://localhost:5432/chat?reWriteBatchedInserts=true
     username: chat
     password: chat
 

@@ -80,9 +80,37 @@ public class RabbitConfiguration {
 
         // AUTO ist schon der Standard - wir schreiben es trotzdem hin, weil es der Kern dieses
         // Schritts ist: Spring sendet das ACK erst, wenn die Listener-Methode OHNE Fehler
-        // zurueckkehrt, also erst nach dem erfolgreichen INSERT. Wirft sie eine Exception,
-        // gibt es kein ACK und die Nachricht geht zurueck in die Queue.
+        // zurueckkehrt, also erst nach dem erfolgreichen Commit. Wirft sie eine Exception,
+        // gibt es fuer das GANZE Paket kein ACK und alle Nachrichten gehen zurueck in die Queue.
         factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+
+        // --- Buendeln ---
+
+        // Die Listener-Methode bekommt eine ganze Liste (List<Message>) statt einer einzelnen
+        // Nachricht.
+        factory.setBatchListener(true);
+
+        // Der Container sammelt die Nachrichten selbst zu einem Paket, bevor er die Methode
+        // aufruft. Ohne das wuerde die Liste immer nur genau eine Nachricht enthalten.
+        factory.setConsumerBatchEnabled(true);
+
+        // Hoechstens 500 Nachrichten pro Paket.
+        factory.setBatchSize(500);
+
+        // So lange wartet der Container auf die NAECHSTE Nachricht. Kommt 200 ms lang keine,
+        // wird das Paket abgeschickt, auch wenn es noch nicht voll ist.
+        factory.setReceiveTimeout(200L);
+
+        // Zusaetzlich: spaetestens 200 ms nach Beginn des Pakets wird es abgeschickt, auch wenn
+        // die Nachrichten weiter tropfen. Ohne diese Zeile koennte ein langsamer, aber steter
+        // Strom (z.B. alle 150 ms eine Nachricht) das Paket bis zu 500 * 150 ms = 75 s
+        // aufhalten - die Spezifikation verlangt aber "nach spaetestens 200 ms".
+        factory.setBatchReceiveTimeout(200L);
+
+        // Prefetch: so viele unbestaetigte Nachrichten schickt RabbitMQ uns hoechstens auf
+        // einmal. Waere der Wert kleiner als 500, haetten wir nie genug Nachrichten fuer ein
+        // volles Paket - RabbitMQ wuerde warten, bis wir bestaetigen, und wir warten auf mehr.
+        factory.setPrefetchCount(500);
         return factory;
     }
 }
