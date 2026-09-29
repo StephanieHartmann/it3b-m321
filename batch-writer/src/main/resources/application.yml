@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: batch-writer
+
+  # Ohne Webserver gibt es keinen Thread, der die Anwendung am Leben haelt. Solange noch
+  # kein Listener auf RabbitMQ lauscht (kommt in Schritt 2), wuerde sich der Dienst
+  # direkt nach dem Start wieder beenden. keep-alive haelt ihn absichtlich offen.
+  main:
+    keep-alive: true
+
+  # Verbindung zur Datenbank aus docker-compose.
+  # Zugangsdaten stehen hier im Klartext, weil das eine Uebungsumgebung ist.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/chat
+    username: chat
+    password: chat
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: chat
+    password: chat
+
+logging:
+  level:
+    # Im Unterricht wollen wir jeden Schritt sehen.
+    ch.benedict.m321: DEBUG
