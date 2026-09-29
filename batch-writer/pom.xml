@@ -32,6 +32,14 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- Jackson: wandelt das JSON aus der Queue in Java-Objekte um. Beim chat-service kommt
+             Jackson mit dem Web-Starter "gratis" mit - hier gibt es keinen Web-Starter, darum
+             muessen wir es selbst einbinden. Enthaelt auch die Unterstuetzung fuer Instant. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
         <!-- JdbcTemplate: SQL direkt, ohne ORM. Spaeter brauchen wir daraus batchUpdate. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
