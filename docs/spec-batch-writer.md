@@ -62,7 +62,7 @@ zum chat-service bzw. zu späteren Phasen.
   Zeile. Eine gültige Nachricht landet nie in `chat.dlq`.
 - **Einzelne kaputte Nachricht im Paket:** Schlägt ein ganzes Paket fehl, wird es
   einmalig Zeile für Zeile geschrieben. So werden die gesunden Nachrichten gespeichert
-  und nur die tatsächlich fehlerhafte landet nach mehreren Fehlversuchen in `chat.dlq`.
+  und nur die tatsächlich fehlerhafte landet in `chat.dlq`.
 
 **Zwei Instanzen (S6):** Mehrere batch-writer hören auf dieselbe Queue `chat.persist`
 (competing consumers). RabbitMQ gibt jede Nachricht an genau eine Instanz — keine
@@ -77,9 +77,11 @@ Doppelten. `ON CONFLICT` bleibt als zusätzliche Absicherung.
   batch-writer selbst schreibt nur.
 
 **Queues:**
-- `chat.persist` — durable, an `chat.messages` gebunden, mit Dead-Letter-Ziel
-  `chat.dlq` und `x-delivery-limit: 3`.
-- `chat.dlq` — nimmt Nachrichten auf, die mehrfach nicht verarbeitet werden konnten.
+- `chat.persist` — durable, an `chat.messages` gebunden (Deklaration unverändert wie
+  im chat-service; kein `x-delivery-limit`, keine Quorum-Queue).
+- `chat.dlq` — einfache durable Queue. Nachrichten, die sich wegen ihrer Daten nie
+  speichern lassen, legt der batch-writer über den Einzelweg-Fallback im Code selbst
+  dorthin. Ist die Datenbank nicht erreichbar, landet nichts in `chat.dlq`.
 
 **Konfiguration (alle Werte aus Umgebungsvariablen; `.env.example` im Repo, `.env`
 NICHT):**

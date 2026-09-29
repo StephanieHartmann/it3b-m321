@@ -21,6 +21,9 @@ public class RabbitConfiguration {
     // (dort RabbitConfiguration.PERSIST_QUEUE_NAME) - sonst warten wir auf eine leere Queue.
     public static final String PERSIST_QUEUE_NAME = "chat.persist";
 
+    // Name der Queue fuer Nachrichten, die sich nie speichern lassen ("Dead Letter Queue").
+    public static final String DEAD_LETTER_QUEUE_NAME = "chat.dlq";
+
     /**
      * Meldet die Queue "chat.persist" beim Broker an. Der chat-service legt sie zwar auch an,
      * aber wir wissen nicht, welcher Dienst zuerst startet. Ohne diese Bean wuerde der Listener
@@ -35,6 +38,18 @@ public class RabbitConfiguration {
         // 3. exclusive = false: auch andere Verbindungen duerfen sie benutzen
         // 4. autoDelete = false: sie verschwindet nicht, wenn sich der letzte Leser abmeldet
         return new Queue(PERSIST_QUEUE_NAME, true, false, false);
+    }
+
+    /**
+     * Meldet die Queue "chat.dlq" an. Hier landen Nachrichten, die sich wegen ihres INHALTS
+     * nie speichern lassen (z.B. ein Raum, den es nicht gibt). So blockieren sie nicht die
+     * uebrigen Nachrichten, gehen aber auch nicht verloren - man kann sie spaeter anschauen.
+     */
+    @Bean
+    public Queue deadLetterQueue() {
+        // Gleiche vier Argumente wie bei chat.persist: dauerhaft, nicht exklusiv, loescht sich
+        // nicht selbst. Die Nachrichten legt der MessageConsumer von Hand hier hinein.
+        return new Queue(DEAD_LETTER_QUEUE_NAME, true, false, false);
     }
 
     /**
