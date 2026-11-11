@@ -58,6 +58,15 @@ public class MessageService {
     }
 
     /**
+     * Liefert alle Nachrichten eines Raums nach der Nachricht lastMessageId, aelteste zuerst.
+     * Wie loadHistory bewusst duenn, damit das Nachholen nicht direkt das Repository kennen muss.
+     */
+    public List<Message> loadMessagesAfter(UUID roomId, UUID lastMessageId) {
+        log.debug("Verpasste Nachrichten angefordert: Raum {}, nach Nachricht {}", roomId, lastMessageId);
+        return messageRepository.findAfter(roomId, lastMessageId);
+    }
+
+    /**
      * Nimmt eine neue Nachricht an und gibt sie an RabbitMQ weiter.
      *
      * Wichtig: hier wird NICHT in die Datenbank geschrieben. Der chat-service

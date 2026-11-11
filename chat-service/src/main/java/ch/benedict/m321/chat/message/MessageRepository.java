@@ -83,6 +83,27 @@ public class MessageRepository {
     }
 
     /**
+     * Holt alle Nachrichten eines Raums, die nach der Nachricht lastMessageId gesendet wurden,
+     * aelteste zuerst. Das braucht der Live-Stream, wenn ein Client sich neu verbindet.
+     * Liegt lastMessageId nicht in diesem Raum oder gibt es sie nicht, ist das Ergebnis leer.
+     */
+    public List<Message> findAfter(UUID roomId, UUID lastMessageId) {
+        // (sent_at, id) > (...) vergleicht zwei Wertepaare der Reihe nach: Zuerst zaehlt sent_at,
+        // und nur bei gleicher Zeit entscheidet id. Die Unterabfrage holt das Wertepaar der letzten
+        // Nachricht direkt aus der Tabelle. Findet sie nichts, passt keine einzige Zeile.
+        String sql = "SELECT id, room_id, sender, text, sent_at "
+                   + "FROM message "
+                   + "WHERE room_id = ? "
+                   + "AND (sent_at, id) > (SELECT sent_at, id FROM message WHERE id = ? AND room_id = ?) "
+                   + "ORDER BY sent_at, id";
+
+        List<Message> found = jdbcTemplate.query(sql, this::mapRow, roomId, lastMessageId, roomId);
+
+        log.debug("{} Nachrichten aus Raum {} nach Nachricht {} gelesen", found.size(), roomId, lastMessageId);
+        return found;
+    }
+
+    /**
      * Wandelt EINE Zeile aus dem Datenbank-Ergebnis (ResultSet) in ein Message-Objekt um.
      * Diese Methode wird automatisch einmal pro gefundener Zeile aufgerufen.
      */
