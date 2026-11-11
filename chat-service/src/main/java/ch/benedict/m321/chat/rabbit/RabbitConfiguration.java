@@ -1,6 +1,10 @@
 package ch.benedict.m321.chat.rabbit;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.AnonymousQueue;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.FanoutExchange;
 import org.springframework.amqp.core.Queue;
@@ -32,6 +36,15 @@ public class RabbitConfiguration {
     // hoeren. Ein Tippfehler an einer der beiden Stellen wuerde sonst still dazu fuehren, dass
     // er auf eine falsche, leere Queue wartet, waehrend sich die echte immer weiter fuellt.
     public static final String PERSIST_QUEUE_NAME = "chat.persist";
+
+    // So viele Nachrichten darf die Live-Queue hoechstens enthalten.
+    private static final int LIVE_QUEUE_MAX_LENGTH = 1000;
+
+    // Was beim Ueberlauf passiert: "drop-head" wirft die aelteste Nachricht weg, also die vorderste
+    // in der Queue. Fuer die Live-Anzeige ist das richtig, denn der Verlauf ist ueber chat.persist
+    // und die Datenbank gesichert (PLANUNG.md, Abschnitt 2.4). RabbitMQ wuerde das auch ohne Angabe
+    // so machen. Wir schreiben es trotzdem hin, weil diese Regel hier eine bewusste Entscheidung ist.
+    private static final String LIVE_QUEUE_OVERFLOW = "drop-head";
 
     /**
      * Meldet den Exchange beim Broker an. Spring legt ihn beim Start automatisch an, falls es
@@ -92,7 +105,40 @@ public class RabbitConfiguration {
     }
 
     /**
-     * Wandelt Nachrichten beim Senden in JSON um. Ohne diese Bean wuerde Spring die Objekte in
+     * Meldet die Live-Queue dieser chat-service-Instanz beim Broker an. Jede Instanz braucht ihre
+     * eigene Queue, damit jede eine eigene Kopie jeder Nachricht fuer ihre SSE-Clients bekommt.
+     * Sie verschwindet mit der Instanz und haelt hoechstens 1000 Nachrichten, die neuesten.
+     */
+    @Bean
+    public AnonymousQueue liveQueue() {
+        // Zusatzeinstellungen einer Queue uebergibt man bei RabbitMQ als Map.
+        Map<String, Object> arguments = new HashMap<>();
+        arguments.put("x-max-length", LIVE_QUEUE_MAX_LENGTH);
+        arguments.put("x-overflow", LIVE_QUEUE_OVERFLOW);
+
+        // AnonymousQueue erzeugt beim Start einen zufaelligen Namen, darum kommen sich mehrere
+        // Instanzen nicht in die Quere. Die Klasse setzt die Eigenschaften von selbst:
+        // - exclusive: nur die Verbindung dieser Instanz darf die Queue benutzen, und der Broker
+        //   loescht die Queue, sobald diese Verbindung endet. Das gilt auch bei einem Absturz.
+        // - autoDelete: die Queue verschwindet, wenn sich ihr letzter Leser abmeldet.
+        // - durable = false: die Queue uebersteht einen Neustart des Brokers nicht.
+        return new AnonymousQueue(arguments);
+    }
+
+    /**
+     * Verbindet die Live-Queue mit dem Exchange "chat.messages". Ohne diese Verbindung bekaeme
+     * die Queue keine einzige Nachricht.
+     */
+    @Bean
+    public Binding liveBinding(AnonymousQueue liveQueue) {
+        // Gleiche Argumente wie bei persistBinding(). Der Name kommt hier von der Queue selbst,
+        // weil er erst beim Start zufaellig erzeugt wird.
+        return new Binding(liveQueue.getName(), Binding.DestinationType.QUEUE, EXCHANGE_NAME, "", null);
+    }
+
+    /**
+     * Wandelt Nachrichten beim Senden in JSON um und beim Empfangen zurueck in ein Message-Objekt
+     * (siehe LiveMessageConsumer). Ohne diese Bean wuerde Spring die Objekte in
      * ein Java-eigenes Binaerformat serialisieren - in der RabbitMQ-Management-Oberflaeche waere
      * dann nur unlesbarer Zeichensalat zu sehen, statt dem JSON, das wir gleich im Broker
      * pruefen wollen.
