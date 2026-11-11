@@ -59,5 +59,11 @@ Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
 
 ## Stand
 
-Das Repository enthält im Moment die Planung und die Dokumente. Der Code entsteht im Unterricht
-entlang des Bootstrap-Plans, Task für Task.
+| Baustein | Stand |
+|---|---|
+| Postgres, RabbitMQ, docker-compose | vorhanden |
+| `chat-service`: REST (`/api/messages`) | vorhanden |
+| `batch-writer`: Bündeln, `chat.dlq`, Testcontainers-Tests | vorhanden |
+| `chat-service`: `GET /stream`, Instanz-Queue, Nachholen mit `Last-Event-ID` | umgesetzt, noch nicht committet |
+| `chat-service`: Integrationstests mit Testcontainers (Verteilung, Neuverbindung) | umgesetzt, noch nicht committet |
+| Keycloak, Raumverwaltung, Gateway, React, JavaFX | offen |

@@ -16,3 +16,5 @@ out/
 .env
 desktop.ini
 
+docker-compose.override.yml
+
